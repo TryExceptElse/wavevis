@@ -154,4 +154,4 @@ class SourceControl:
 
     @dir.setter
     def dir(self, new_dir: float):
-        self.program['u_dir[{}]'.format(self.i)] = new_dir % math.pi
+        self.program['u_dir[{}]'.format(self.i)] = new_dir % (2 * math.pi)

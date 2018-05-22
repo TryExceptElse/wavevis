@@ -15,6 +15,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.model = model
         uic.loadUi(os.path.join(settings.UI_DIR, 'mainwindow.ui'), self)
+
+        # Give first source amp 1
+        self.model.sources[0].amp = 1
+
         self.set_up_main_view()
         self.show()
 
@@ -24,13 +28,8 @@ class MainWindow(QMainWindow):
         canvas.native.setParent(self)
         self.mainViewVBox.addWidget(canvas.native)
 
-        self.model.sources[0].amp = 1
-
         [self.rightSideVBox.addWidget(EmitterControlWidget(source))
          for source in self.model.sources]
-
-        # Give first source amp 1
-        self.model.sources[0].amp = 1
 
 
 class EmitterControlWidget(QWidget):
@@ -45,24 +44,125 @@ class EmitterControlWidget(QWidget):
     def set_up_ui(self):
         self.nameLabel.setText('Emitter #{}'.format(self.source_control.i))
 
+        # Set up amplitude controls -----------------------------------
+
         amp_slider_ratio = 1 / 99  # Slider value / actual ratio.
 
         def on_amp_slider_changed(x):
-            self.source_control.amp = x * amp_slider_ratio
+            amp = x * amp_slider_ratio
+            self.source_control.amp = amp
+            self.amplitudeEdit.setText('{:.3}'.format(amp))
+
+        def on_amp_edit_changed(s: str):
+            try:
+                amp = float(s)
+            except ValueError:
+                amp = 0
+            self.source_control.amp = amp
+            self.amplitudeSlider.blockSignals(True)
+            self.amplitudeSlider.setValue(amp / amp_slider_ratio)
+            self.amplitudeSlider.blockSignals(False)
+
+        @with_blocked(self.amplitudeSlider, self.amplitudeEdit)
+        def initialize_amp_widget_values():
+            initial_amp = float(self.source_control.amp)
+            self.amplitudeSlider.setValue(initial_amp / amp_slider_ratio)
+            self.amplitudeEdit.setText('{:.3}'.format(initial_amp))
 
         self.amplitudeSlider.valueChanged.connect(on_amp_slider_changed)
-        self.amplitudeSlider.setValue(
-            self.source_control.amp / amp_slider_ratio)
+        self.amplitudeEdit.textChanged.connect(on_amp_edit_changed)
+        initialize_amp_widget_values()
+
+        # Set up phase controls ---------------------------------------
 
         phase_slider_ratio = 1 / 99 * 2 * math.pi  # Slider v / actual ratio.
 
         def on_phase_slider_changed(x):
-            self.source_control.phase = x * phase_slider_ratio
+            phase = x * phase_slider_ratio
+            self.source_control.phase = phase
+            self.phaseEdit.setText(format_angle(phase))
+
+        @with_blocked(self.phaseSlider)
+        def on_phase_edit_changed(s: str):
+            try:
+                phase = parse_theta(s)
+            except ValueError:
+                phase = 0
+            self.source_control.phase = phase
+            self.phaseSlider.setValue(phase / phase_slider_ratio)
+
+        @with_blocked(self.phaseSlider, self.phaseEdit)
+        def initialize_phase_widget_values():
+            phase = self.source_control.phase
+            self.phaseSlider.setValue(phase / phase_slider_ratio)
+            self.phaseEdit.setText(format_angle(phase))
 
         self.phaseSlider.valueChanged.connect(on_phase_slider_changed)
-        self.phaseSlider.setValue(self.source_control.amp / phase_slider_ratio)
+        self.phaseEdit.textChanged.connect(on_phase_edit_changed)
+        initialize_phase_widget_values()
+
+        # Set up direction controls -----------------------------------
+
+        dir_slider_ratio = 1 / 99 * 2 * math.pi  # Slider v / actual ratio.
 
         def on_dir_slider_changed(x):
-            self.source_control.dir = x / 99 * 2 * math.pi
+            direction = x * dir_slider_ratio
+            self.source_control.dir = direction
+            self.directionEdit.setText(format_angle(direction))
+
+        @with_blocked(self.directionSlider)
+        def on_dir_edit_changed(s: str):
+            try:
+                direction = parse_theta(s)
+            except ValueError:
+                direction = 0
+            self.source_control.dir = direction
+            self.directionSlider.setValue(direction / dir_slider_ratio)
+
+        @with_blocked(self.phaseSlider, self.phaseEdit)
+        def initialize_dir_widget_values():
+            direction = self.source_control.dir / dir_slider_ratio
+            self.directionSlider.setValue(direction / amp_slider_ratio)
+            self.directionEdit.setText(format_angle(direction))
 
         self.directionSlider.valueChanged.connect(on_dir_slider_changed)
+        self.directionEdit.textChanged.connect(on_dir_edit_changed)
+        initialize_dir_widget_values()
+
+
+def parse_theta(s: str):
+    """
+    Parses string for an angle in radians.
+    :param s: str representing angle.
+    :return: Angle in radians
+    :raises: ValueError if str cannot be parsed.
+    """
+    suffix = ''
+    for possible_suffix in 'pi', 'π', 'deg', 'd', '°':
+        if s.endswith(possible_suffix):
+            suffix = possible_suffix
+    base_v = float(s[:-len(suffix)] if len(suffix) else s)
+    if not suffix:
+        theta = base_v
+    elif suffix in ('pi', 'π'):
+        theta = base_v * math.pi
+    elif suffix in ('deg', 'd', '°'):
+        theta = base_v / 180 * math.pi
+    else:
+        raise ValueError
+    return theta
+
+
+def format_angle(theta: float):
+    return '{:.3}π'.format(float(theta) / math.pi)
+
+
+def with_blocked(*widgets):
+    def decorator(f):
+        def wrapper(*args, **kwargs):
+            [widget.blockSignals(True) for widget in widgets]
+            f(*args, **kwargs)
+            [widget.blockSignals(False) for widget in widgets]
+        wrapper.__name__ = f.__name__ + '_wrapper'
+        return wrapper
+    return decorator
