@@ -3,10 +3,16 @@ Module containing the visualization program and model for accessing and
 modifying its parameters.
 """
 
+import collections
 import math
 import vispy.gloo as gloo
 
 N_SOURCES = 4
+
+MODES = collections.OrderedDict((
+    ('wave_function', 0),
+    ('amplitude', 1)
+))
 
 VERT_SHADER = """
 attribute vec2 a_position;
@@ -16,13 +22,17 @@ void main (void)
 }
 """
 
-FRAG_SHADER = """
+FRAG_SHADER = """ 
+#version 130
 
 #define M_PI 3.1415926535897932384626433832795
+#define C 40.0  // Rate of wave propagation in visualization.
 
-#define C 60.0  // Rate of wave propagation in visualization.
+#define WAVE_FUNCTION 0
+#define AMPLITUDE 1
 
 uniform float u_global_time;
+uniform int u_mode = 0;
 
 uniform float u_lambda = 4.0;       // Wavelength
 uniform float u_contrast = 0.25;
@@ -43,6 +53,17 @@ float f(vec2 uv, int src) {
         u_global_time * C / u_lambda
     ) * u_amp[src];
     return v;
+}
+
+/**
+ * Finds phasor of a specified wave source at a specified position.
+ */
+vec2 find_phasor(vec2 uv, int src) {
+    float relative_phase = u_dir[src];
+    float x = uv.x * cos(relative_phase) - uv.y * sin(relative_phase);
+    float phase = relative_phase + x / u_lambda;
+    float amp = u_amp[src];
+    return vec2(sin(phase) * amp, cos(phase) * amp);
 }
 
 /**
@@ -70,11 +91,39 @@ vec3 value_to_rgb(float v, float max) {
     return vec3(display_v, display_v, display_v);
 }
 
-void main(void) {
-    float max = find_max_amp();
+/**
+ * Finds sum of all wave function results.
+ */
+float wave_sum(vec2 uv) {
     float v = 0.0;
     for (int i = 0; i < N_SOURCES; ++i) {
-        v += f(gl_FragCoord.xy, i);
+        v += f(uv, i);
+    }
+    return v;
+}
+
+/**
+ * Finds amplitude sum at a given position.
+ */
+float amplitude_sum(vec2 uv) {
+    vec2 phasor_sum = vec2(0.0, 0.0);
+    for (int i = 0; i < N_SOURCES; ++i) {
+        phasor_sum += find_phasor(uv, i);
+    }
+    return length(phasor_sum);
+}
+
+void main(void) {
+    float max = find_max_amp();
+    float v;
+    vec2 uv = gl_FragCoord.xy;
+    switch(u_mode) {
+        case WAVE_FUNCTION:
+            v = wave_sum(uv);
+            break;
+        case AMPLITUDE:
+            v = amplitude_sum(uv);
+            break;
     }
     gl_FragColor = vec4(value_to_rgb(v, max), 1.000);
 }
@@ -93,6 +142,7 @@ class Model:
                                       (+1, -1), (+1, +1)]
         self.contrast = 0.5  # Uses setter to change uniform.
         self.wavelength = 4  # Uses setter to change uniform.
+        self.mode = 'wave_function'
 
         self.sources = [SourceControl(self.program, i)
                         for i in range(N_SOURCES)]
@@ -118,6 +168,16 @@ class Model:
             raise ValueError('Wavelength must be > 0. Got: {}'
                              .format(new_wavelength))
         self.program['u_lambda'] = new_wavelength
+
+    @property
+    def mode(self):
+        return self.program['u_mode']
+
+    @mode.setter
+    def mode(self, mode: str):
+        if mode not in ('amplitude', 'wave_function'):
+            raise ValueError('Unexpected input: {}'.format(mode))
+        self.program['u_mode'] = MODES[mode]
 
 
 class SourceControl:

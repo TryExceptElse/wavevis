@@ -5,7 +5,7 @@ import os
 import math
 
 from .plane_view import PlaneView
-from .model import Model, SourceControl
+from .model import Model, SourceControl, MODES
 
 import settings
 
@@ -30,6 +30,16 @@ class MainWindow(QMainWindow):
 
         [self.rightSideVBox.addWidget(EmitterControlWidget(source))
          for source in self.model.sources]
+
+        def set_up_mode_selector():
+            def on_mode_changed(index: int):
+                self.model.mode = self.modeSelector.itemText(index)
+
+            self.modeSelector.addItems(MODES)
+            self.modeSelector.setCurrentIndex(0)
+            self.modeSelector.currentIndexChanged.connect(on_mode_changed)
+
+        set_up_mode_selector()
 
 
 class EmitterControlWidget(QWidget):
