@@ -25,6 +25,11 @@ class PlaneView(app.Canvas):
     def on_timer_event(self, event):
         if self._timer.running:
             self.program["u_global_time"] += event.dt
+        # Fix weird floating point precision issues.
+        # (Too large a value into OpenGL's sin function results
+        #  in bad output)
+        if self.program['u_global_time'] > 6e2:
+            self.program['u_global_time'] = 0
         self.update()
 
     def apply_zoom(self):
