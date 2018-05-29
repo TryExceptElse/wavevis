@@ -153,7 +153,7 @@ vec3 theta2rgb(float theta) {
     if (theta < 0.0) {
         theta += M_PI * 2.0;
     }
-    vec3 hsv = vec3(theta / M_PI * 180.0, u_contrast, u_contrast);
+    vec3 hsv = vec3(theta / M_PI * 180.0, 1.0, u_contrast);
     return hsv2rgb(hsv);
 }
 
