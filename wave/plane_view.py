@@ -4,7 +4,11 @@ import vispy.app as app
 
 class PlaneView(app.Canvas):
     def __init__(self, program: gloo.Program):
-        app.Canvas.__init__(self, size=(800, 600), keys='interactive')
+        # If the program segfaults upon initializing canvas, using
+        # wheels to install PyQt5, installing the following libraries
+        # are likely to fix the issue:
+        # libglu1-mesa-dev, mesa-common-dev
+        super().__init__(size=(800, 600), keys='interactive')
         self.program = program
 
         self.apply_zoom()
